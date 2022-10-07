@@ -26,10 +26,19 @@ struct Tile {
 }
 
 pub struct Level {
+    width: usize,
     data: Vec<Vec<Tile>>,
 }
 
 impl Level {
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    pub fn height(&self) -> usize {
+        self.data.len()
+    }
+
     pub fn walls(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
         self.filter(|tile| matches!(tile.occupant, TileOccupant::Wall))
     }
@@ -109,14 +118,17 @@ impl LevelCollection {
         let mut lines = std::io::BufReader::new(file).lines();
 
         let mut collection = LevelCollection { levels: Vec::new() };
-        let mut level = Level { data: Vec::new() };
+        let mut level = Level { width: 0, data: Vec::new() };
         while let Some(Ok(line)) = lines.next() {
             if is_puzzle_line(&line) {
                 let row = parse_row(&line);
+                if row.len() > level.width {
+                    level.width = row.len();
+                }
                 level.data.push(row);
             } else if !level.data.is_empty() {
                 collection.levels.push(level);
-                level = Level { data: Vec::new() };
+                level = Level { width: 0, data: Vec::new() };
             }
         }
 
@@ -130,10 +142,24 @@ impl LevelCollection {
 
 impl IntoIterator for LevelCollection {
     type Item = Level;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
+    type IntoIter = LevelCollectionIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.levels.into_iter()
+        LevelCollectionIter {
+            inner_iter: self.levels.into_iter(),
+        }
+    }
+}
+
+pub struct LevelCollectionIter {
+    inner_iter: std::vec::IntoIter<Level>,
+}
+
+impl Iterator for LevelCollectionIter {
+    type Item = Level;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner_iter.next()
     }
 }
 
