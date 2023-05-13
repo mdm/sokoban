@@ -1,5 +1,7 @@
 use std::io::BufRead;
 
+use bevy::prelude::Resource;
+
 pub enum Direction {
     Up,
     Right,
@@ -151,6 +153,7 @@ impl IntoIterator for LevelCollection {
     }
 }
 
+#[derive(Resource)]
 pub struct LevelCollectionIter {
     inner_iter: std::vec::IntoIter<Level>,
 }
