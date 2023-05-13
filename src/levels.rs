@@ -1,5 +1,6 @@
 use std::io::BufRead;
 
+use anyhow::Result;
 use bevy::prelude::Resource;
 
 pub enum Direction {
@@ -27,6 +28,7 @@ struct Tile {
     occupant: TileOccupant,
 }
 
+#[derive(Resource)]
 pub struct Level {
     width: usize,
     data: Vec<Vec<Tile>>,
@@ -115,7 +117,7 @@ pub struct LevelCollection {
 }
 
 impl LevelCollection {
-    pub fn from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_file(path: &str) -> Result<Self> {
         let file = std::fs::File::open(path)?;
         let mut lines = std::io::BufReader::new(file).lines();
 
