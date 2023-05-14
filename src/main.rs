@@ -13,7 +13,7 @@ struct Position {
 
 #[derive(Component)]
 struct Movable {
-    destination: Option<Position>,
+    destination: Position,
 }
 
 #[derive(Component)]
@@ -40,7 +40,6 @@ fn spawn_level(
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
     mut levels: ResMut<levels::LevelCollectionIter>,
-    camera: Query<&Transform, With<Camera>>,
 ) {
     let texture_handle =
         asset_server.load("sprites/kenney_sokobanpack/Tilesheet/sokoban_tilesheet.png");
@@ -142,7 +141,6 @@ fn spawn_level(
                 x: x as i32,
                 y: y as i32,
             },
-            Movable { destination: None },
             SpriteSheetBundle {
                 texture_atlas: texture_atlas_handle,
                 sprite: TextureAtlasSprite::new(52),
@@ -159,101 +157,185 @@ fn spawn_level(
 }
 
 fn handle_keyboard_input(
+    mut commands: Commands,
     keys: Res<Input<KeyCode>>,
-    mut query: Query<(&Position, &mut Movable), With<Pusher>>,
+    mut query: Query<(Entity, &Position, Option<&Movable>), With<Pusher>>,
 ) {
-    if let Ok((position, mut movable)) = query.get_single_mut() {
-        if movable.destination.is_some() {
+    if let Ok((pusher, position, movable)) = query.get_single_mut() {
+        if movable.is_some() {
             return;
         }
 
         if keys.pressed(KeyCode::Left) {
-            movable.destination = Some(Position {
-                x: position.x - 1,
-                y: position.y,
+            commands.entity(pusher).insert(Movable {
+                destination: Position {
+                    x: position.x - 1,
+                    y: position.y,
+                },
             });
         }
 
         if keys.pressed(KeyCode::Right) {
-            movable.destination = Some(Position {
-                x: position.x + 1,
-                y: position.y,
+            commands.entity(pusher).insert(Movable {
+                destination: Position {
+                    x: position.x + 1,
+                    y: position.y,
+                },
             });
         }
 
         if keys.pressed(KeyCode::Up) {
-            movable.destination = Some(Position {
-                x: position.x,
-                y: position.y - 1,
+            commands.entity(pusher).insert(Movable {
+                destination: Position {
+                    x: position.x,
+                    y: position.y - 1,
+                },
             });
         }
 
         if keys.pressed(KeyCode::Down) {
-            movable.destination = Some(Position {
-                x: position.x,
-                y: position.y + 1,
+            commands.entity(pusher).insert(Movable {
+                destination: Position {
+                    x: position.x,
+                    y: position.y + 1,
+                },
             });
         }
     }
 }
 
 fn move_movable(
+    mut commands: Commands,
     time: Res<Time>,
     level: Res<Level>,
-    mut query: Query<(&mut Movable, &mut Position, &mut Transform)>,
+    mut query: Query<(Entity, &mut Movable, &mut Position, &mut Transform)>,
 ) {
     let tile_size = 64.0;
     let tiles_per_second = 2.0;
 
-    for (mut movable, mut position, mut transform) in query.iter_mut() {
+    for (entity, movable, mut position, mut transform) in query.iter_mut() {
         let mut stop = false;
-        if let Some(destination) = &movable.destination {
-            let x_f = (destination.x as f32 - level.width() as f32 / 2.0 + 0.5) * tile_size;
-            let y_f = (destination.y as f32 - level.height() as f32 / 2.0 + 0.5) * tile_size;
+        let x_f = (movable.destination.x as f32 - level.width() as f32 / 2.0 + 0.5) * tile_size;
+        let y_f = (movable.destination.y as f32 - level.height() as f32 / 2.0 + 0.5) * tile_size;
 
-            if destination.x < position.x {
-                transform.translation.x -= tile_size * tiles_per_second * time.delta_seconds();
+        if movable.destination.x < position.x {
+            transform.translation.x -= tile_size * tiles_per_second * time.delta_seconds();
 
-                if transform.translation.x < x_f {
-                    transform.translation.x = x_f;
-                    stop = true;    
-                }
+            if transform.translation.x < x_f {
+                transform.translation.x = x_f;
+                stop = true;
             }
+        }
 
-            if destination.x > position.x {
-                transform.translation.x += tile_size * tiles_per_second * time.delta_seconds();
+        if movable.destination.x > position.x {
+            transform.translation.x += tile_size * tiles_per_second * time.delta_seconds();
 
-                if transform.translation.x > x_f {
-                    transform.translation.x = x_f;
-                    stop = true;    
-                }
+            if transform.translation.x > x_f {
+                transform.translation.x = x_f;
+                stop = true;
             }
+        }
 
-            if destination.y < position.y {
-                transform.translation.y += tile_size * tiles_per_second * time.delta_seconds();
+        if movable.destination.y < position.y {
+            transform.translation.y += tile_size * tiles_per_second * time.delta_seconds();
 
-
-                if transform.translation.y > -y_f {
-                    transform.translation.y = -y_f;
-                    stop = true;    
-                }
+            if transform.translation.y > -y_f {
+                transform.translation.y = -y_f;
+                stop = true;
             }
+        }
 
-            if destination.y > position.y {
-                transform.translation.y -= tile_size * tiles_per_second * time.delta_seconds();
+        if movable.destination.y > position.y {
+            transform.translation.y -= tile_size * tiles_per_second * time.delta_seconds();
 
-
-                if transform.translation.y < -y_f {
-                    transform.translation.y = -y_f;
-                    stop = true;    
-                }
+            if transform.translation.y < -y_f {
+                transform.translation.y = -y_f;
+                stop = true;
             }
         }
 
         if stop {
-            if let Some(destination) = movable.destination.take() {
-                position.x = destination.x;
-                position.y = destination.y;
+            position.x = movable.destination.x;
+            position.y = movable.destination.y;
+            commands.entity(entity).remove::<Movable>();
+        }
+    }
+}
+
+fn stop_pusher(
+    mut commands: Commands,
+    level: Res<Level>,
+    mut pusher_query: Query<(Entity, &Position, &Movable, &mut Transform), With<Pusher>>,
+    mut walls_query: Query<&Position, With<Wall>>,
+) {
+    if let Ok((pusher, position, movable, mut transform)) = pusher_query.get_single_mut() {
+        for wall in walls_query.iter_mut() {
+            if movable.destination.x == wall.x && movable.destination.y == wall.y {
+                let tile_size = 64.0;
+                let x_f = (position.x as f32 - level.width() as f32 / 2.0 + 0.5) * tile_size;
+                let y_f = (position.y as f32 - level.height() as f32 / 2.0 + 0.5) * tile_size;
+
+                transform.translation.x = x_f;
+                transform.translation.y = -y_f;
+                commands.entity(pusher).remove::<Movable>();
+                break;
+            }
+        }
+    }
+}
+
+fn push_box(
+    mut commands: Commands,
+    pusher_query: Query<(&Position, &Movable), With<Pusher>>,
+    mut boxes_query: Query<(Entity, &Position), With<Box>>,
+) {
+    if let Ok((pusher_position, movable)) = pusher_query.get_single() {
+        for (box_entity, box_position) in boxes_query.iter_mut() {
+            if movable.destination.x == box_position.x && movable.destination.y == box_position.y {
+                commands.entity(box_entity).insert(Movable {
+                    destination: Position {
+                        x: movable.destination.x - pusher_position.x + box_position.x,
+                        y: movable.destination.y - pusher_position.y + box_position.y,
+                    },
+                });
+            }
+        }
+    }
+}
+
+fn stop_box(
+    mut commands: Commands,
+    level: Res<Level>,
+    mut movables_query: Query<(Entity, &Position, &mut Transform), With<Movable>>,
+    mut pushed_box_query: Query<&Movable, With<Box>>,
+    mut boxes_query: Query<&Position, With<Box>>,
+    mut walls_query: Query<&Position, With<Wall>>,
+) {
+    if let Ok(box_movable) = pushed_box_query.get_single_mut() {
+        let mut stop = false;
+        for wall in walls_query.iter_mut() {
+            if box_movable.destination.x == wall.x && box_movable.destination.y == wall.y {
+                stop = true;
+                break;
+            }
+        }
+
+        for other_box in boxes_query.iter_mut() {
+            if box_movable.destination.x == other_box.x && box_movable.destination.y == other_box.y {
+                stop = true;
+                break;
+            }
+        }
+
+        if stop {
+            for (entity, position, mut transform) in movables_query.iter_mut() {
+                let tile_size = 64.0;
+                let x_f = (position.x as f32 - level.width() as f32 / 2.0 + 0.5) * tile_size;
+                let y_f = (position.y as f32 - level.height() as f32 / 2.0 + 0.5) * tile_size;
+
+                transform.translation.x = x_f;
+                transform.translation.y = -y_f;
+                commands.entity(entity).remove::<Movable>();
             }
         }
     }
@@ -270,6 +352,10 @@ fn main() -> Result<()> {
         .add_startup_system(spawn_level)
         .add_system(handle_keyboard_input)
         .add_system(move_movable)
+        .add_system(stop_pusher)
+        .add_system(push_box)
+        .add_system(stop_box)
+        .add_system(bevy::window::close_on_esc)
         .run();
 
     Ok(())

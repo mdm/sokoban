@@ -3,13 +3,6 @@ use std::io::BufRead;
 use anyhow::Result;
 use bevy::prelude::Resource;
 
-pub enum Direction {
-    Up,
-    Right,
-    Down,
-    Left,
-}
-
 enum TileKind {
     Outside,
     Floor,
@@ -64,51 +57,15 @@ impl Level {
         .next().unwrap()
     }
 
-    pub fn move_pusher(&mut self, direction: Direction) -> Option<(usize, usize)> {
-        let pusher = self.pusher();
-
-        let pusher_destination = self.target(&pusher, &direction);
-        match self.data[pusher_destination.1][pusher_destination.0].occupant {
-            TileOccupant::None => {
-                self.data[pusher_destination.1][pusher_destination.0].occupant = TileOccupant::Pusher;
-                self.data[pusher.1][pusher.0].occupant = TileOccupant::None;
-                Some(pusher_destination)
-            }
-            TileOccupant::Box => {
-                let box_destination = self.target(&pusher_destination, &direction);
-                match self.data[box_destination.1][box_destination.0].occupant {
-                    TileOccupant::None => {
-                        self.data[box_destination.1][box_destination.0].occupant = TileOccupant::Box;
-                        self.data[pusher_destination.1][pusher_destination.0].occupant = TileOccupant::Pusher;
-                        self.data[pusher.1][pusher.0].occupant = TileOccupant::None;
-                        Some(pusher_destination)
-                    }
-                    _ => None,
-                }
-            }
-            _ => None,
-        }
-    }
-
     fn filter<'a>(&'a self, f: impl Fn(&Tile) -> bool + 'a) -> impl Iterator<Item = (usize, usize)> + 'a {
         self.data
         .iter()
         .enumerate()
-        .map(|(y, row)|
+        .flat_map(|(y, row)|
             row.iter().enumerate().map(move |(x, tile)| (x, y, tile))
         )
-        .flatten()
         .filter(move |(_, _, tile)| f(tile))
         .map(|(x, y, _)| (x, y))
-    }
-
-    fn target(&self, position: &(usize, usize), direction: &Direction) -> (usize, usize) {
-        match direction {
-            Direction::Up => (position.0, position.1 - 1),
-            Direction::Right => (position.0 + 1, position.1),
-            Direction::Down => (position.0, position.1 + 1),
-            Direction::Left => (position.0 - 1, position.1),
-        }
     }
 }
 
