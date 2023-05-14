@@ -321,7 +321,8 @@ fn stop_box(
         }
 
         for other_box in boxes_query.iter_mut() {
-            if box_movable.destination.x == other_box.x && box_movable.destination.y == other_box.y {
+            if box_movable.destination.x == other_box.x && box_movable.destination.y == other_box.y
+            {
                 stop = true;
                 break;
             }
@@ -341,6 +342,11 @@ fn stop_box(
     }
 }
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
+enum SokobanSystemSet {
+    Stop,
+}
+
 fn main() -> Result<()> {
     // let levels = levels::LevelCollection::from_file("levels/Thinking-Rabbit-Original-Plus-Extra.txt")?;
     let levels = levels::LevelCollection::from_file("levels/single.txt")?;
@@ -350,11 +356,23 @@ fn main() -> Result<()> {
         .insert_resource(levels.into_iter())
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_level)
-        .add_system(handle_keyboard_input)
-        .add_system(move_movable)
-        .add_system(stop_pusher)
-        .add_system(push_box)
-        .add_system(stop_box)
+        .add_systems(
+            (
+                handle_keyboard_input,
+                apply_system_buffers,
+                push_box,
+                apply_system_buffers,
+            )
+                .chain()
+                .before(SokobanSystemSet::Stop),
+        )
+        .add_system(stop_pusher.in_set(SokobanSystemSet::Stop))
+        .add_system(stop_box.in_set(SokobanSystemSet::Stop))
+        .add_systems(
+            (apply_system_buffers, move_movable)
+                .chain()
+                .after(SokobanSystemSet::Stop),
+        )
         .add_system(bevy::window::close_on_esc)
         .run();
 
